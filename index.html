@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Батискаф «Триест» — 16:9</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: #e2e8f0;
+      color: #0f172a;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .font-oswald {
+      font-family: 'Oswald', system-ui, -apple-system, sans-serif;
+    }
+    /* Строгий широкоэкранный контейнер 16:9 без скролла */
+    .frame-16-9 {
+      width: min(100vw, calc(100vh * 16 / 9));
+      height: min(100vh, calc(100vw * 9 / 16));
+      aspect-ratio: 16 / 9;
+      background-color: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 14px;
+      box-shadow: 0 20px 50px rgba(15, 23, 42, 0.14);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    /* Кастомный ползунок */
+    input[type="range"].depth-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 7px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #bae6fd 0%, #0284c7 55%, #0f172a 100%);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"].depth-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #ffffff;
+      border: 3px solid #0284c7;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+      cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+    input[type="range"].depth-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.12);
+    }
+    .node-group {
+      cursor: pointer;
+      transition: opacity 0.15s ease;
+    }
+    .node-group:hover {
+      opacity: 0.92;
+    }
+    @keyframes floatBubble {
+      0% { transform: translateY(0) scale(0.85); opacity: 0.9; }
+      100% { transform: translateY(-28px) scale(1.15); opacity: 0; }
+    }
+    .bubble-rise {
+      animation: floatBubble 1.4s infinite ease-out;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame-16-9" id="appFrame">
+    <!-- Верхняя панель (~52px) -->
+    <header class="h-[52px] shrink-0 bg-white border-b border-slate-200 px-4 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-2 bg-slate-100 border border-slate-300 rounded-lg px-2.5 py-1">
+          <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+          <span class="font-oswald font-bold tracking-wide text-sm md:text-base text-slate-900 uppercase">
+            БАТИСКАФ «ТРИЕСТ» • 16:9
+          </span>
+        </div>
+
+        <!-- Переключатель вкладок -->
+        <nav class="flex items-center gap-1.5 bg-slate-100 p-1 rounded-lg border border-slate-200" aria-label="Режимы работы">
+          <button
+            type="button"
+            id="tabProblemBtn"
+            onclick="setMode('problem')"
+            class="font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition bg-slate-900 text-white shadow-xs cursor-pointer"
+          >
+            1. Проблема Пиккара
+          </button>
+          <button
+            type="button"
+            id="tabSimBtn"
+            onclick="setMode('simulator')"
+            class="font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition text-slate-700 hover:bg-white cursor-pointer"
+          >
+            2. Решение: Симулятор «Триеста»
+          </button>
+        </nav>
+      </div>
+
+      <!-- Живые показатели глубины и давления -->
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1 flex items-baseline gap-1.5">
+          <span class="font-oswald text-[11px] uppercase tracking-wider text-sky-800">Глубина</span>
+          <span id="topDepthValue" class="font-oswald font-bold text-sm md:text-base text-slate-900">0 м</span>
+        </div>
+        <div class="bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1 flex items-baseline gap-1.5">
+          <span class="font-oswald text-[11px] uppercase tracking-wider text-amber-800">Давление</span>
+          <span id="topPressureValue" class="font-oswald font-bold text-sm md:text-base text-slate-900">1 атм</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- РЕЖИМ 1: ПРОБЛЕМА ПИККАРА -->
+    <main id="modeProblem" class="flex-1 min-h-0 p-3.5 flex flex-col justify-between gap-2.5">
+      <!-- Короткая вводная строка -->
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2 flex items-center justify-between gap-4 shrink-0">
+        <p class="text-xs md:text-sm text-slate-700 leading-snug">
+          <strong class="font-oswald uppercase tracking-wide text-slate-900 mr-1.5">Идея и противоречие:</strong>
+          Пиккар решил отказаться от троса («пуповины») и сделать возможным самостоятельное вертикальное движение аппарата вниз и вверх — но на глубине столкнулся с жёстким инженерным противоречием.
+        </p>
+        <span class="font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md bg-rose-50 text-rose-700 border border-rose-200 shrink-0">
+          До 10 916 м
+        </span>
+      </div>
+
+      <!-- Две карточки рядом -->
+      <div class="grid grid-cols-2 gap-3.5 flex-1 min-h-0">
+        <!-- Вариант А -->
+        <article class="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between min-h-0">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="font-oswald text-xs uppercase tracking-wider text-sky-700 font-semibold">Вариант А</span>
+              <h2 class="font-oswald text-lg md:text-xl font-bold text-slate-900 uppercase leading-tight">
+                Большой и тонкостенный
+              </h2>
+            </div>
+            <span id="badgeVarA" class="font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-emerald-50 text-emerald-800 border-emerald-200 shrink-0">
+              Корпус цел
+            </span>
+          </div>
+
+          <!-- Иллюстрация корпуса варианта А -->
+          <div class="my-1.5 rounded-lg border border-slate-200 bg-gradient-to-b from-sky-50 to-sky-100/70 flex-1 min-h-0 flex items-center justify-center relative overflow-hidden px-3">
+            <svg id="svgVarA" viewBox="0 0 360 130" class="w-full h-full max-h-[135px]">
+              <line x1="0" y1="24" x2="360" y2="24" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5 4" />
+              <text x="10" y="17" font-size="10" fill="#0369a1" font-weight="600">Поверхность воды</text>
+              <g id="hullVarAGroup" transform="translate(180, 74)">
+                <!-- Большой тонкостенный корпус -->
+                <ellipse id="hullVarAEllipse" cx="0" cy="0" rx="115" ry="38" fill="#f8fafc" stroke="#334155" stroke-width="2.5" />
+                <text id="hullVarALabel" x="0" y="4" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">
+                  Большой объём — легко всплывает
+                </text>
+                <!-- Стрелки внешнего давления -->
+                <g id="arrowsVarA" opacity="0.2">
+                  <line x1="-138" y1="0" x2="-120" y2="0" stroke="#dc2626" stroke-width="2.2" />
+                  <polygon points="-120,0 -126,-4 -126,4" fill="#dc2626" />
+                  <line x1="138" y1="0" x2="120" y2="0" stroke="#dc2626" stroke-width="2.2" />
+                  <polygon points="120,0 126,-4 126,4" fill="#dc2626" />
+                  <line x1="0" y1="-56" x2="0" y2="-42" stroke="#dc2626" stroke-width="2.2" />
+                  <polygon points="0,-42 -4,-48 4,-48" fill="#dc2626" />
+                  <line x1="0" y1="56" x2="0" y2="42" stroke="#dc2626" stroke-width="2.2" />
+                  <polygon points="0,42 -4,48 4,48" fill="#dc2626" />
+                </g>
+              </g>
+            </svg>
+          </div>
+
+          <p id="descVarA" class="text-xs md:text-[13px] text-slate-700 leading-snug">
+            Хорошо всплывает за счёт большого объёма вытесненной воды, но тонкие стенки сминает внешнее давление на глубине.
+          </p>
+        </article>
+
+        <!-- Вариант Б -->
+        <article class="bg-white border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between min-h-0">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="font-oswald text-xs uppercase tracking-wider text-amber-700 font-semibold">Вариант Б</span>
+              <h2 class="font-oswald text-lg md:text-xl font-bold text-slate-900 uppercase leading-tight">
+                Маленький и толстостенный
+              </h2>
+            </div>
+            <span id="badgeVarB" class="font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-amber-50 text-amber-800 border-amber-200 shrink-0">
+              Тонет без всплытия
+            </span>
+          </div>
+
+          <!-- Иллюстрация корпуса варианта Б -->
+          <div class="my-1.5 rounded-lg border border-slate-200 bg-gradient-to-b from-sky-50 to-slate-200/70 flex-1 min-h-0 flex items-center justify-center relative overflow-hidden px-3">
+            <svg viewBox="0 0 360 130" class="w-full h-full max-h-[135px]">
+              <line x1="0" y1="24" x2="360" y2="24" stroke="#0284c7" stroke-width="1.5" stroke-dasharray="5 4" />
+              <text x="10" y="17" font-size="10" fill="#0369a1" font-weight="600">Без троса («пуповины»)</text>
+              <g id="hullVarBGroup" transform="translate(180, 62)">
+                <!-- Толстая стенка -->
+                <circle cx="0" cy="0" r="34" fill="#cbd5e1" stroke="#0f172a" stroke-width="8" />
+                <circle cx="0" cy="0" r="24" fill="#ffffff" stroke="#475569" stroke-width="1.5" />
+                <text x="0" y="4" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">
+                  Прочный
+                </text>
+                <!-- Стрелка тяжёлого погружения вниз -->
+                <line x1="0" y1="38" x2="0" y2="56" stroke="#0f172a" stroke-width="2.4" />
+                <polygon points="0,58 -4,51 4,51" fill="#0f172a" />
+                <text x="52" y="6" font-size="10" fill="#334155" font-weight="600">
+                  Выдерживает давление,
+                </text>
+                <text x="52" y="19" font-size="10" fill="#991b1b" font-weight="600">
+                  но сам не всплывает
+                </text>
+              </g>
+            </svg>
+          </div>
+
+          <p id="descVarB" class="text-xs md:text-[13px] text-slate-700 leading-snug">
+            Выдерживает колоссальное давление на глубине, но без троса тяжело тонет и не всплывает сам.
+          </p>
+        </article>
+      </div>
+
+      <!-- Нижняя панель проверки глубины и переход к симулятору -->
+      <div class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center justify-between gap-4 shrink-0">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <label for="problemSlider" class="font-oswald text-xs uppercase tracking-wider text-slate-700 shrink-0">
+            Проверка глубины:
+          </label>
+          <input
+            id="problemSlider"
+            type="range"
+            min="0"
+            max="11000"
+            step="10"
+            value="0"
+            oninput="setProblemDepth(Number(this.value))"
+            class="depth-slider max-w-[230px]"
+          />
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button type="button" onclick="setProblemDepth(0)" class="px-2 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">0 м</button>
+            <button type="button" onclick="setProblemDepth(500)" class="px-2 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">500 м</button>
+            <button type="button" onclick="setProblemDepth(4000)" class="px-2 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">4 000 м</button>
+            <button type="button" onclick="setProblemDepth(10916)" class="px-2 py-1 text-xs font-semibold rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 cursor-pointer">10 916 м</button>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onclick="setMode('simulator')"
+          class="font-oswald text-sm uppercase tracking-wider bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg transition shadow-xs shrink-0 cursor-pointer"
+        >
+          Как Пиккар решил противоречие →
+        </button>
+      </div>
+    </main>
+
+    <!-- РЕЖИМ 2: РЕШЕНИЕ — СИМУЛЯТОР «ТРИЕСТА» -->
+    <main id="modeSimulator" class="hidden flex-1 min-h-0 p-3.5 grid grid-cols-12 gap-3.5">
+      <!-- Левая колонка: интерактивный SVG-разрез батискафа «Триест» -->
+      <section class="col-span-7 bg-white border border-slate-200 rounded-xl p-3 flex flex-col justify-between min-h-0">
+        <div class="flex items-center justify-between gap-2 mb-1 shrink-0">
+          <div>
+            <h2 class="font-oswald text-base md:text-lg font-bold uppercase text-slate-900 leading-none">
+              Разрез батискафа «Триест» — поплавок с бензином и открытый нижний люк
+            </h2>
+            <p class="text-[11px] md:text-xs text-slate-600 mt-0.5">
+              Нажмите на любой узел схемы, чтобы прочитать его устройство и назначение
+            </p>
+          </div>
+          <span class="font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md bg-amber-50 text-amber-800 border border-amber-200 shrink-0">
+            Бензин легче воды
+          </span>
+        </div>
+
+        <!-- SVG-схема разреза -->
+        <div class="flex-1 min-h-0 rounded-xl border border-slate-200 bg-gradient-to-b from-sky-50 via-sky-100/60 to-sky-200/70 relative overflow-hidden">
+          <svg id="triesteSvg" viewBox="0 0 640 370" class="w-full h-full">
+            <defs>
+              <!-- Штриховка вертикальных полос корпуса как у «Триеста» -->
+              <pattern id="hullStripes" width="24" height="120" patternUnits="userSpaceOnUse">
+                <rect x="0" y="0" width="24" height="120" fill="#f1f5f9" />
+                <rect x="0" y="0" width="6" height="120" fill="#cbd5e1" opacity="0.65" />
+              </pattern>
+              <!-- Градиент бензина -->
+              <linearGradient id="gasolineGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#fde68a" />
+                <stop offset="100%" stop-color="#f59e0b" />
+              </linearGradient>
+              <!-- Градиент забортной воды -->
+              <linearGradient id="seaWaterGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.85" />
+                <stop offset="100%" stop-color="#0284c7" stop-opacity="0.95" />
+              </linearGradient>
+            </defs>
+
+            <!-- Линия поверхности моря при малых глубинах -->
+            <g id="surfaceLineGroup">
+              <line x1="0" y1="36" x2="640" y2="36" stroke="#0284c7" stroke-width="2" stroke-dasharray="6 4" />
+              <text x="14" y="27" font-size="11" font-weight="600" fill="#0369a1">Поверхность океана (0 м)</text>
+            </g>
+
+            <!-- Дно при глубоком погружении -->
+            <g id="seabedGroup" opacity="0">
+              <rect x="0" y="338" width="640" height="32" fill="#94a3b8" />
+              <line x1="0" y1="338" x2="640" y2="338" stroke="#334155" stroke-width="2" />
+              <text x="320" y="357" text-anchor="middle" font-size="11" font-weight="700" fill="#0f172a">
+                Дно Марианской впадины (10 916 м)
+              </text>
+            </g>
+
+            <!-- Группа всего батискафа (двигается по вертикали при погружении/всплытии) -->
+            <g id="bathyscapheGroup" transform="translate(0, 0)">
+              <!-- Пузырьки при продувке/заполнении водного балласта -->
+              <g id="bubblesLayer"></g>
+
+              <!-- Падающая стальная дробь при сбросе -->
+              <g id="shotFallLayer"></g>
+
+              <!-- 1. Входная шахта («ВХОД») -->
+              <g id="node-shaft" class="node-group" onclick="selectNode('shaft')">
+                <rect x="296" y="62" width="48" height="34" rx="4" fill="#e2e8f0" stroke="#334155" stroke-width="2" />
+                <text x="320" y="83" text-anchor="middle" font-size="11" font-weight="800" fill="#0f172a">ВХОД</text>
+                <!-- Шахта сквозь поплавок к гондоле -->
+                <rect x="304" y="96" width="32" height="128" fill="#cbd5e1" stroke="#334155" stroke-width="2" />
+              </g>
+
+              <!-- 2. Главный поплавок батискафа (большой тонкостенный корпус с полосами) -->
+              <g id="node-float" class="node-group" onclick="selectNode('float')">
+                <!-- Основа корпуса с вертикальными полосами -->
+                <path
+                  d="M 85 96 L 555 96 L 574 148 L 555 200 L 420 200 L 405 212 L 235 212 L 220 200 L 85 200 L 66 148 Z"
+                  fill="url(#hullStripes)"
+                  stroke="#334155"
+                  stroke-width="3"
+                />
+                <!-- Вертикальные полосы поверх отсеков для узнаваемого облика -->
+                <g opacity="0.22" fill="#475569">
+                  <rect x="155" y="97" width="5" height="102" />
+                  <rect x="200" y="97" width="5" height="102" />
+                  <rect x="245" y="97" width="5" height="102" />
+                  <rect x="385" y="97" width="5" height="102" />
+                  <rect x="430" y="97" width="5" height="102" />
+                  <rect x="475" y="97" width="5" height="102" />
+                </g>
+              </g>
+
+              <!-- 3. Концевые цистерны водного балласта -->
+              <g id="node-water-ballast" class="node-group" onclick="selectNode('waterBallast')">
+                <!-- Левая цистерна -->
+                <rect x="92" y="103" width="66" height="90" rx="4" fill="#ffffff" stroke="#475569" stroke-width="1.8" />
+                <rect id="leftWaterFill" x="93" y="193" width="64" height="0" rx="3" fill="url(#seaWaterGrad)" />
+                <text x="125" y="122" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">ВОДНЫЙ</text>
+                <text x="125" y="133" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">БАЛЛАСТ</text>
+
+                <!-- Правая цистерна -->
+                <rect x="482" y="103" width="66" height="90" rx="4" fill="#ffffff" stroke="#475569" stroke-width="1.8" />
+                <rect id="rightWaterFill" x="483" y="193" width="64" height="0" rx="3" fill="url(#seaWaterGrad)" />
+                <text x="515" y="122" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">ВОДНЫЙ</text>
+                <text x="515" y="133" text-anchor="middle" font-size="9.5" font-weight="700" fill="#0f172a">БАЛЛАСТ</text>
+              </g>
+
+              <!-- 4. Отсеки с бензином + забортная вода, зашедшая снизу через люк -->
+              <g id="node-gasoline" class="node-group" onclick="selectNode('gasoline')">
+                <!-- Левый бензиновый отсек -->
+                <rect x="166" y="103" width="76" height="90" rx="4" fill="url(#gasolineGrad)" stroke="#b45309" stroke-width="1.8" />
+                <!-- Забортная вода, поджимающая бензин снизу -->
+                <rect id="leftSeaUnderGas" x="167" y="187" width="74" height="5" rx="2" fill="url(#seaWaterGrad)" />
+                <text x="204" y="124" text-anchor="middle" font-size="10.5" font-weight="800" fill="#78350f">БЕНЗИН</text>
+
+                <!-- Правый бензиновый отсек -->
+                <rect x="398" y="103" width="76" height="90" rx="4" fill="url(#gasolineGrad)" stroke="#b45309" stroke-width="1.8" />
+                <!-- Забортная вода, поджимающая бензин снизу -->
+                <rect id="rightSeaUnderGas" x="399" y="187" width="74" height="5" rx="2" fill="url(#seaWaterGrad)" />
+                <text x="436" y="124" text-anchor="middle" font-size="10.5" font-weight="800" fill="#78350f">БЕНЗИН</text>
+
+                <!-- Стрелки выравнивания давления внутри поплавка -->
+                <g id="equalPressureArrows">
+                  <line x1="204" y1="142" x2="204" y2="168" stroke="#0369a1" stroke-width="1.8" />
+                  <polygon points="204,138 201,144 207,144" fill="#0369a1" />
+                  <polygon points="204,172 201,166 207,166" fill="#0369a1" />
+
+                  <line x1="436" y1="142" x2="436" y2="168" stroke="#0369a1" stroke-width="1.8" />
+                  <polygon points="436,138 433,144 439,144" fill="#0369a1" />
+                  <polygon points="436,172 433,166 439,166" fill="#0369a1" />
+                </g>
+              </g>
+
+              <!-- 5. Открытый нижний люк компенсации давления -->
+              <g id="node-hatch" class="node-group" onclick="selectNode('hatch')">
+                <!-- Проём в нижней части поплавка -->
+                <rect x="248" y="196" width="46" height="18" rx="3" fill="#38bdf8" stroke="#0369a1" stroke-width="2" />
+                <!-- Канал передачи давления воды к бензину -->
+                <path d="M 271 214 L 271 196 L 236 186" fill="none" stroke="#0284c7" stroke-width="2" stroke-dasharray="3 2" />
+                <polygon points="233,185 240,184 238,190" fill="#0284c7" />
+                <line x1="271" y1="224" x2="271" y2="203" stroke="#0284c7" stroke-width="2.2" />
+                <polygon points="271,200 267,207 275,207" fill="#0284c7" />
+                <text x="271" y="236" text-anchor="middle" font-size="9.5" font-weight="800" fill="#0369a1">
+                  ОТКРЫТЫЙ ЛЮК
+                </text>
+              </g>
+
+              <!-- 6. Бункеры со стальной дробью -->
+              <g id="node-iron-shot" class="node-group" onclick="selectNode('ironShot')">
+                <!-- Левый бункер -->
+                <path d="M 168 200 L 196 200 L 190 246 L 174 246 Z" fill="#e2e8f0" stroke="#334155" stroke-width="2" />
+                <path id="leftShotFill" d="M 171 212 L 193 212 L 189 244 L 175 244 Z" fill="#475569" />
+
+                <!-- Правый бункер -->
+                <path d="M 444 200 L 472 200 L 466 246 L 450 246 Z" fill="#e2e8f0" stroke="#334155" stroke-width="2" />
+                <path id="rightShotFill" d="M 447 212 L 469 212 L 465 244 L 451 244 Z" fill="#475569" />
+
+                <text x="182" y="260" text-anchor="middle" font-size="9" font-weight="700" fill="#1e293b">ДРОБЬ</text>
+                <text x="458" y="260" text-anchor="middle" font-size="9" font-weight="700" fill="#1e293b">ДРОБЬ</text>
+              </g>
+
+              <!-- 7. Толстостенная сферическая кабина исследователя -->
+              <g id="node-cabin" class="node-group" onclick="selectNode('cabin')">
+                <!-- Толстая стальная оболочка -->
+                <circle cx="320" cy="264" r="44" fill="#475569" stroke="#0f172a" stroke-width="3" />
+                <!-- Внутреннее защищённое пространство -->
+                <circle cx="320" cy="264" r="30" fill="#ffffff" stroke="#0f172a" stroke-width="2" />
+                <!-- Иллюминатор -->
+                <circle cx="336" cy="264" r="6" fill="#bae6fd" stroke="#0284c7" stroke-width="2" />
+                <text x="316" y="261" text-anchor="middle" font-size="9" font-weight="800" fill="#0f172a">КАБИНА</text>
+                <text x="316" y="273" text-anchor="middle" font-size="8.5" font-weight="600" fill="#334155">1 атм</text>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+      <!-- Правая колонка: показатели, управление и карточка узла -->
+      <aside class="col-span-5 flex flex-col justify-between gap-2.5 min-h-0">
+        <!-- Показатели состояния -->
+        <div class="bg-white border border-slate-200 rounded-xl p-3 shrink-0">
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <div class="font-oswald text-[11px] uppercase tracking-wider text-slate-500">Глубина и давление</div>
+              <div id="simDepthPressure" class="font-oswald font-bold text-sm text-slate-900">0 м • 1 атм</div>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
+              <div class="font-oswald text-[11px] uppercase tracking-wider text-slate-500">Запас дроби / балласт</div>
+              <div id="simBallastStatus" class="font-oswald font-bold text-sm text-slate-900">Дробь 100% • Сухо</div>
+            </div>
+          </div>
+
+          <div class="mt-2 bg-emerald-50 border border-emerald-200 rounded-lg px-2.5 py-1.5">
+            <div class="font-oswald text-[11px] uppercase tracking-wider text-emerald-800">Выравнивание в поплавке</div>
+            <div class="text-xs font-semibold text-emerald-950">Давление выровнено — стенки не сминаются</div>
+          </div>
+
+          <div class="mt-1.5 bg-sky-50 border border-sky-200 rounded-lg px-2.5 py-1.5">
+            <div class="font-oswald text-[11px] uppercase tracking-wider text-sky-800">Плавучесть аппарата</div>
+            <div id="simBuoyancyLabel" class="text-xs font-semibold text-sky-950">Положительная — аппарат всплывает</div>
+          </div>
+        </div>
+
+        <!-- Ползунок глубины и кнопки управления -->
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-2 shrink-0">
+          <div class="flex items-center justify-between gap-2">
+            <label for="simSlider" class="font-oswald text-xs uppercase tracking-wider text-slate-700">
+              Глубина погружения
+            </label>
+            <span id="simSliderReadout" class="font-oswald text-xs font-bold text-sky-700">0 м</span>
+          </div>
+          <input
+            id="simSlider"
+            type="range"
+            min="0"
+            max="10916"
+            step="16"
+            value="0"
+            oninput="setSimDepth(Number(this.value))"
+            class="depth-slider"
+          />
+
+          <div class="grid grid-cols-2 gap-1.5 pt-0.5">
+            <button
+              type="button"
+              id="btnWaterBallast"
+              onclick="toggleWaterBallast()"
+              class="font-oswald text-xs uppercase tracking-wide py-1.5 px-2.5 rounded-lg border bg-sky-50 hover:bg-sky-100 text-sky-950 border-sky-300 font-semibold transition cursor-pointer"
+            >
+              Заполнить водный балласт
+            </button>
+            <button
+              type="button"
+              id="btnDropShot"
+              onclick="dropShot()"
+              class="font-oswald text-xs uppercase tracking-wide py-1.5 px-2.5 rounded-lg border bg-amber-50 hover:bg-amber-100 text-amber-950 border-amber-300 font-semibold transition cursor-pointer"
+            >
+              Сбросить дробь (всплытие)
+            </button>
+            <button
+              type="button"
+              onclick="diveToBottom()"
+              class="font-oswald text-xs uppercase tracking-wide py-1.5 px-2.5 rounded-lg border bg-slate-900 hover:bg-slate-800 text-white border-slate-900 font-semibold transition cursor-pointer"
+            >
+              Погружение на дно (10 916 м)
+            </button>
+            <button
+              type="button"
+              onclick="resetToSurface()"
+              class="font-oswald text-xs uppercase tracking-wide py-1.5 px-2.5 rounded-lg border bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-300 font-semibold transition cursor-pointer"
+            >
+              Сброс на поверхность
+            </button>
+          </div>
+        </div>
+
+        <!-- Карточка пояснения выбранного узла аппарата -->
+        <div class="bg-white border border-slate-200 rounded-xl p-3 flex-1 min-h-0 flex flex-col justify-center">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="font-oswald text-[11px] uppercase tracking-wider text-slate-500">
+              Выбранный узел аппарата
+            </span>
+            <span id="selectedNodeBadge" class="font-oswald text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
+              Открытый люк
+            </span>
+          </div>
+          <h3 id="selectedNodeTitle" class="font-oswald text-base font-bold uppercase text-slate-900 leading-tight">
+            Открытый нижний люк компенсации давления
+          </h3>
+          <p id="selectedNodeDesc" class="text-xs text-slate-700 leading-snug mt-1">
+            Через открытый люк в днище поплавка забортная вода заходит снизу и поджимает бензин. Наружное давление воды и давление бензина внутри выравниваются, поэтому тонкие стенки поплавка не сминаются.
+          </p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script>
+    // Единое состояние приложения
+    const state = {
+      mode: 'problem',
+      problemDepth: 0,
+      simDepth: 0,
+      targetDepth: null,
+      waterBallastFilled: false,
+      shotRemaining: 100, // проценты стальной дроби
+      selectedNode: 'hatch',
+      animFrameId: null,
+      lastTime: performance.now()
+    };
+
+    const nodeDetails = {
+      gasoline: {
+        badge: 'Поплавок • Бензин',
+        title: 'Отсеки с лёгким бензином',
+        desc: 'Бензин легче морской воды, поэтому большой поплавок создаёт сильную подъёмную силу и помогает аппарату всплывать. Жидкость почти не сжимается, а снаружи её поджимает забортная вода.'
+      },
+      waterBallast: {
+        badge: 'Концевые цистерны',
+        title: 'Цистерны водного балласта',
+        desc: 'На носу и корме расположены отсеки водного балласта. При заполнении водой аппарат теряет плавучесть и начинает погружение; при продувке или всплытии помогает выходить на поверхность.'
+      },
+      shaft: {
+        badge: 'Доступ экипажа',
+        title: 'Входная шахта («ВХОД»)',
+        desc: 'Вертикальный туннель проходит сквозь поплавок к верхнему люку гондолы, позволяя экипажу войти в кабину на поверхности и спуститься на глубину.'
+      },
+      ironShot: {
+        badge: 'Балласт для всплытия',
+        title: 'Бункеры со стальной дробью',
+        desc: 'Утяжелитель из мелкой стальной дроби помогает уйти на глубину. Когда нужно всплыть, дробь сбрасывают, аппарат становится легче и поднимается вверх.'
+      },
+      cabin: {
+        badge: 'Защита экипажа',
+        title: 'Толстостенная сферическая кабина',
+        desc: 'Небольшая сфера с толстыми прочными стенками выдерживает колоссальное давление на глубине до 10 916 м, сохраняя внутри безопасные условия для исследователей.'
+      },
+      hatch: {
+        badge: 'Выравнивание давления',
+        title: 'Открытый нижний люк компенсации давления',
+        desc: 'Через открытый люк в днище поплавка забортная вода заходит снизу и поджимает бензин. Наружное давление воды и давление бензина внутри выравниваются, поэтому тонкие стенки поплавка не сминаются.'
+      },
+      float: {
+        badge: 'Корпус поплавка',
+        title: 'Большой корпус поплавка с полосами',
+        desc: 'Объёмный корпус с характерными вертикальными полосами вмещает лёгкий бензин для плавучести и не испытывает раздавливающей разницы давлений благодаря открытому нижнему люку.'
+      }
+    };
+
+    // Перевод глубины (м) в условное наружное давление (атм)
+    function calcPressureAtm(depthMeters) {
+      return Math.max(1, Math.round(1 + depthMeters / 10));
+    }
+
+    function setMode(newMode) {
+      state.mode = newMode;
+      const problemEl = document.getElementById('modeProblem');
+      const simEl = document.getElementById('modeSimulator');
+      const tabP = document.getElementById('tabProblemBtn');
+      const tabS = document.getElementById('tabSimBtn');
+
+      if (newMode === 'problem') {
+        problemEl.classList.remove('hidden');
+        simEl.classList.add('hidden');
+        tabP.className = 'font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition bg-slate-900 text-white shadow-xs cursor-pointer';
+        tabS.className = 'font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition text-slate-700 hover:bg-white cursor-pointer';
+      } else {
+        problemEl.classList.add('hidden');
+        simEl.classList.remove('hidden');
+        tabS.className = 'font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition bg-slate-900 text-white shadow-xs cursor-pointer';
+        tabP.className = 'font-oswald text-xs md:text-sm font-semibold tracking-wide px-3 py-1 rounded-md transition text-slate-700 hover:bg-white cursor-pointer';
+      }
+      renderAll();
+    }
+
+    function setProblemDepth(val) {
+      state.problemDepth = Math.max(0, Math.min(11000, val));
+      document.getElementById('problemSlider').value = state.problemDepth;
+      renderAll();
+    }
+
+    function setSimDepth(val) {
+      state.targetDepth = null;
+      state.simDepth = Math.max(0, Math.min(10916, val));
+      if (state.simDepth > 50 && !state.waterBallastFilled) {
+        state.waterBallastFilled = true;
+      }
+      document.getElementById('simSlider').value = state.simDepth;
+      renderAll();
+    }
+
+    function toggleWaterBallast() {
+      state.targetDepth = null;
+      state.waterBallastFilled = !state.waterBallastFilled;
+      spawnBubblesBurst(8);
+      renderAll();
+    }
+
+    function dropShot() {
+      state.targetDepth = null;
+      if (state.shotRemaining > 0) {
+        state.shotRemaining = Math.max(0, state.shotRemaining - 50);
+        spawnShotBurst();
+      }
+      renderAll();
+    }
+
+    function diveToBottom() {
+      state.waterBallastFilled = true;
+      state.targetDepth = 10916;
+      spawnBubblesBurst(8);
+      renderAll();
+    }
+
+    function resetToSurface() {
+      state.targetDepth = null;
+      state.simDepth = 0;
+      state.waterBallastFilled = false;
+      state.shotRemaining = 100;
+      document.getElementById('simSlider').value = 0;
+      document.getElementById('bubblesLayer').innerHTML = '';
+      document.getElementById('shotFallLayer').innerHTML = '';
+      renderAll();
+    }
+
+    function selectNode(nodeKey) {
+      state.selectedNode = nodeKey;
+      const info = nodeDetails[nodeKey] || nodeDetails.hatch;
+      document.getElementById('selectedNodeBadge').textContent = info.badge;
+      document.getElementById('selectedNodeTitle').textContent = info.title;
+      document.getElementById('selectedNodeDesc').textContent = info.desc;
+    }
+
+    function spawnBubblesBurst(count) {
+      const layer = document.getElementById('bubblesLayer');
+      layer.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const cx = i % 2 === 0 ? 105 + (i * 5) % 35 : 495 + (i * 7) % 35;
+        const cy = 92 - (i % 3) * 6;
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', cx);
+        circle.setAttribute('cy', cy);
+        circle.setAttribute('r', 3 + (i % 3));
+        circle.setAttribute('fill', '#e0f2fe');
+        circle.setAttribute('stroke', '#0284c7');
+        circle.setAttribute('stroke-width', '1.2');
+        circle.setAttribute('class', 'bubble-rise');
+        layer.appendChild(circle);
+      }
+    }
+
+    function spawnShotBurst() {
+      const layer = document.getElementById('shotFallLayer');
+      layer.innerHTML = '';
+      const centers = [182, 458];
+      centers.forEach((bx) => {
+        for (let i = 0; i < 6; i++) {
+          const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', bx + (i - 2.5) * 3.5);
+          dot.setAttribute('cy', 252 + (i % 3) * 8);
+          dot.setAttribute('r', 2.3);
+          dot.setAttribute('fill', '#334155');
+          layer.appendChild(dot);
+        }
+      });
+    }
+
+    function computeBuoyancyText() {
+      // Без формул: опираемся на водный балласт, запас дроби и вертикальное движение
+      if (state.targetDepth !== null && state.targetDepth > state.simDepth) {
+        return 'Отрицательная — аппарат погружается';
+      }
+      if (state.waterBallastFilled && state.shotRemaining >= 50 && state.simDepth < 10900) {
+        return 'Отрицательная — аппарат погружается';
+      }
+      if (!state.waterBallastFilled && state.shotRemaining === 0 && state.simDepth > 0) {
+        return 'Положительная — аппарат всплывает';
+      }
+      if (state.shotRemaining < 50 && state.simDepth > 0 && state.waterBallastFilled) {
+        return 'Нейтральная — аппарат зависает';
+      }
+      if (state.simDepth === 0 && !state.waterBallastFilled) {
+        return 'Положительная — аппарат всплывает';
+      }
+      return 'Нейтральная — аппарат зависает';
+    }
+
+    function renderProblemMode() {
+      const d = state.problemDepth;
+      const badgeA = document.getElementById('badgeVarA');
+      const descA = document.getElementById('descVarA');
+      const ellipseA = document.getElementById('hullVarAEllipse');
+      const labelA = document.getElementById('hullVarALabel');
+      const arrowsA = document.getElementById('arrowsVarA');
+
+      // Сжатие большого тонкостенного корпуса при росте глубины
+      const crushFactor = Math.min(1, d / 1200);
+      const rx = Math.max(62, 115 - crushFactor * 52);
+      const ry = Math.max(11, 38 - crushFactor * 27);
+      ellipseA.setAttribute('rx', rx.toFixed(1));
+      ellipseA.setAttribute('ry', ry.toFixed(1));
+      arrowsA.setAttribute('opacity', (0.15 + crushFactor * 0.85).toFixed(2));
+
+      if (d < 250) {
+        badgeA.textContent = 'Корпус цел';
+        badgeA.className = 'font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-emerald-50 text-emerald-800 border-emerald-200 shrink-0';
+        ellipseA.setAttribute('fill', '#f8fafc');
+        ellipseA.setAttribute('stroke', '#334155');
+        labelA.textContent = 'Большой объём — легко всплывает';
+        descA.textContent = 'Хорошо всплывает за счёт большого объёма вытесненной воды, но тонкие стенки сминает внешнее давление на глубине.';
+      } else if (d < 800) {
+        badgeA.textContent = 'Корпус сминается';
+        badgeA.className = 'font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-amber-50 text-amber-800 border-amber-200 shrink-0';
+        ellipseA.setAttribute('fill', '#fef3c7');
+        ellipseA.setAttribute('stroke', '#d97706');
+        labelA.textContent = 'Стенки прогибаются под давлением';
+        descA.textContent = 'На глубине внешнее давление начинает сжимать тонкие стенки — большой корпус теряет форму.';
+      } else {
+        badgeA.textContent = 'Корпус смят';
+        badgeA.className = 'font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-rose-50 text-rose-800 border-rose-200 shrink-0';
+        ellipseA.setAttribute('fill', '#fee2e2');
+        ellipseA.setAttribute('stroke', '#dc2626');
+        labelA.textContent = 'Раздавлен внешним давлением';
+        descA.textContent = 'Тонкостенный объёмный аппарат не выдерживает глубинного давления и сминается.';
+      }
+
+      // Вариант Б: смещение вниз по мере увеличения глубины
+      const bShiftY = 62 + (d / 11000) * 34;
+      document.getElementById('hullVarBGroup').setAttribute('transform', `translate(180, ${bShiftY.toFixed(1)})`);
+      const badgeB = document.getElementById('badgeVarB');
+      const descB = document.getElementById('descVarB');
+      if (d === 0) {
+        badgeB.textContent = 'Тонет без всплытия';
+        badgeB.className = 'font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-amber-50 text-amber-800 border-amber-200 shrink-0';
+        descB.textContent = 'Выдерживает колоссальное давление на глубине, но без троса тяжело тонет и не всплывает сам.';
+      } else {
+        badgeB.textContent = 'Цел • Не всплывёт сам';
+        badgeB.className = 'font-oswald text-xs uppercase tracking-wider px-2.5 py-1 rounded-md border bg-sky-50 text-sky-800 border-sky-200 shrink-0';
+        descB.textContent = 'Толстые стенки выдерживают давление на глубине, но аппарат тяжёлый и не сможет самостоятельно всплыть без подъёмной силы.';
+      }
+    }
+
+    function renderSimulatorMode() {
+      const d = state.simDepth;
+      const ratio = d / 10916;
+
+      // Положение батискафа по вертикали в пределах SVG
+      const yOffset = Math.round(ratio * 44);
+      document.getElementById('bathyscapheGroup').setAttribute('transform', `translate(0, ${yOffset})`);
+
+      // Поверхность моря видна у поверхности, дно — у 10 916 м
+      const surfaceGroup = document.getElementById('surfaceLineGroup');
+      surfaceGroup.setAttribute('opacity', d < 400 ? String((1 - d / 400).toFixed(2)) : '0.12');
+
+      const seabedGroup = document.getElementById('seabedGroup');
+      seabedGroup.setAttribute('opacity', d > 9500 ? String(Math.min(1, (d - 9500) / 1416).toFixed(2)) : '0');
+
+      // Заполнение цистерн водного балласта
+      const wbHeight = state.waterBallastFilled ? 86 : 0;
+      const wbY = 193 - wbHeight;
+      document.getElementById('leftWaterFill').setAttribute('y', wbY);
+      document.getElementById('leftWaterFill').setAttribute('height', wbHeight);
+      document.getElementById('rightWaterFill').setAttribute('y', wbY);
+      document.getElementById('rightWaterFill').setAttribute('height', wbHeight);
+
+      // Уровень забортной воды, зашедшей через открытый нижний люк и поджимающей бензин снизу
+      const underGasHeight = Math.round(5 + ratio * 28);
+      const underGasY = 192 - underGasHeight;
+      document.getElementById('leftSeaUnderGas').setAttribute('y', underGasY);
+      document.getElementById('leftSeaUnderGas').setAttribute('height', underGasHeight);
+      document.getElementById('rightSeaUnderGas').setAttribute('y', underGasY);
+      document.getElementById('rightSeaUnderGas').setAttribute('height', underGasHeight);
+
+      // Запас стальной дроби в бункерах
+      const shotScale = state.shotRemaining / 100;
+      const leftShot = document.getElementById('leftShotFill');
+      const rightShot = document.getElementById('rightShotFill');
+      if (shotScale <= 0) {
+        leftShot.setAttribute('opacity', '0');
+        rightShot.setAttribute('opacity', '0');
+      } else {
+        leftShot.setAttribute('opacity', '1');
+        rightShot.setAttribute('opacity', '1');
+        const topY = 244 - shotScale * 32;
+        leftShot.setAttribute('d', `M 172 ${topY.toFixed(1)} L 192 ${topY.toFixed(1)} L 189 244 L 175 244 Z`);
+        rightShot.setAttribute('d', `M 448 ${topY.toFixed(1)} L 468 ${topY.toFixed(1)} L 465 244 L 451 244 Z`);
+      }
+
+      // Обновление правой панели
+      const atm = calcPressureAtm(d);
+      document.getElementById('simDepthPressure').textContent = `${Math.round(d).toLocaleString('ru-RU')} м • ${atm.toLocaleString('ru-RU')} атм`;
+      document.getElementById('simSliderReadout').textContent = `${Math.round(d).toLocaleString('ru-RU')} м`;
+      document.getElementById('simSlider').value = Math.round(d);
+
+      const waterStateText = state.waterBallastFilled ? 'Балласт с водой' : 'Сухо';
+      document.getElementById('simBallastStatus').textContent = `Дробь ${state.shotRemaining}% • ${waterStateText}`;
+      document.getElementById('simBuoyancyLabel').textContent = computeBuoyancyText();
+
+      const btnWater = document.getElementById('btnWaterBallast');
+      btnWater.textContent = state.waterBallastFilled ? 'Осушить водный балласт' : 'Заполнить водный балласт';
+
+      const btnShot = document.getElementById('btnDropShot');
+      btnShot.textContent = state.shotRemaining > 0 ? `Сбросить дробь (${state.shotRemaining}%)` : 'Дробь сброшена';
+    }
+
+    function renderAll() {
+      const activeDepth = state.mode === 'problem' ? state.problemDepth : state.simDepth;
+      const atm = calcPressureAtm(activeDepth);
+
+      document.getElementById('topDepthValue').textContent = `${Math.round(activeDepth).toLocaleString('ru-RU')} м`;
+      document.getElementById('topPressureValue').textContent = `${atm.toLocaleString('ru-RU')} атм`;
+
+      renderProblemMode();
+      renderSimulatorMode();
+    }
+
+    function tick(now) {
+      const dt = Math.min(0.05, (now - state.lastTime) / 1000);
+      state.lastTime = now;
+
+      if (state.mode === 'simulator' && state.targetDepth !== null) {
+        const diff = state.targetDepth - state.simDepth;
+        if (Math.abs(diff) < 12) {
+          state.simDepth = state.targetDepth;
+          state.targetDepth = null;
+        } else {
+          state.simDepth += Math.sign(diff) * Math.min(Math.abs(diff), 2600 * dt);
+        }
+        renderAll();
+      }
+
+      state.animFrameId = requestAnimationFrame(tick);
+    }
+
+    // Инициализация
+    selectNode('hatch');
+    renderAll();
+    state.animFrameId = requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
